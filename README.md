@@ -48,31 +48,20 @@ export default defineConfig({
       // Block detection - redirects to mirror if site is blocked
       blockDetection: {
         enabled: true,
-        blockMarker: '<!-- SUCCESS_MARKER -->',
-        redirectUrl: 'https://mirror.example.com',
-        dnsDomains: ['_chunked.example.com']  // TXT record for dynamic config
+        // dnsDomain: 'example.com'  // optional, defaults to current hostname
       }
     })
   ]
 });
 ```
 
-## Environment Variables
-
-Settings can be configured via `.env`:
-
-```env
-VITE_CHUNKED_REDIRECT_URL=https://mirror.example.com
-VITE_CHUNKED_DNS_DOMAINS=_chunked.backup.com
-```
-
 ## Block Detection
 
-Service Worker checks for `blockMarker` in index.html on every page load. If missing (ISP replaced content), redirects to mirror.
+Service Worker checks for block marker in index.html on every page load. If missing (ISP replaced content), redirects to mirror.
 
-**DNS lookup order:**
-1. Current domain — auto-detected from `location.hostname`
-2. Domains from `dnsDomains` config — fallback if primary fails
+**DNS Domain:**
+- If `dnsDomain` is set in config — uses that domain
+- Otherwise — uses current `location.hostname`
 
 **DNS TXT Record Format**:
 ```json
@@ -126,9 +115,7 @@ dist/
 | `downloadable` | `.zip .7z .rar .exe` | Trigger download UI |
 | `debug` | false | Console logs |
 | `blockDetection.enabled` | false | Enable marker check |
-| `blockDetection.blockMarker` | `<!-- SUCCESS_MARKER -->` | HTML marker |
-| `blockDetection.redirectUrl` | — | Mirror URL |
-| `blockDetection.dnsDomains` | `[]` | TXT record domains |
+| `blockDetection.dnsDomain` | `location.hostname` | Domain for TXT lookup |
 
 ## License
 

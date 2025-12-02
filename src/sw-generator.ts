@@ -10,11 +10,8 @@ var DEBUG = ${config.debug};
 var CONFIG = ${JSON.stringify({ downloadable: config.downloadable, blockDetection: config.blockDetection })};
 var BLOCK_CONFIG = CONFIG.blockDetection;
 
-// Add current domain as first DNS check target
-if (BLOCK_CONFIG.enabled) {
-  var currentDomain = self.location.hostname;
-  var extraDomains = BLOCK_CONFIG.dnsDomains || [];
-  BLOCK_CONFIG.dnsDomains = [currentDomain].concat(extraDomains.filter(function(d) { return d !== currentDomain; }));
+if (BLOCK_CONFIG.enabled && !BLOCK_CONFIG.dnsDomain) {
+  BLOCK_CONFIG.dnsDomain = self.location.hostname;
 }
 
 var chunkedAssets = new Map();
@@ -25,21 +22,13 @@ function log() {
   if (DEBUG) console.log.apply(console, ['[chunked-sw]'].concat(Array.prototype.slice.call(arguments)));
 }
 
-function checkBlockSettings(domainIndex) {
-  domainIndex = domainIndex || 0;
-  
-  if (!BLOCK_CONFIG.enabled || !BLOCK_CONFIG.dnsDomains || BLOCK_CONFIG.dnsDomains.length === 0) {
+function checkBlockSettings() {
+  if (!BLOCK_CONFIG.enabled || !BLOCK_CONFIG.dnsDomain) {
     return Promise.resolve(false);
   }
   
-  if (domainIndex >= BLOCK_CONFIG.dnsDomains.length) {
-    BLOCK_CONFIG.enabled = false;
-    log('[Block Detection] All DNS checks failed, disabling');
-    return Promise.resolve(false);
-  }
-  
-  var dnsUrl = BLOCK_CONFIG.dnsResolverUrl + BLOCK_CONFIG.dnsDomains[domainIndex];
-  log('[Block Detection] Checking DNS:', BLOCK_CONFIG.dnsDomains[domainIndex]);
+  var dnsUrl = BLOCK_CONFIG.dnsResolverUrl + BLOCK_CONFIG.dnsDomain;
+  log('[Block Detection] Checking DNS:', BLOCK_CONFIG.dnsDomain);
   
   return fetch(dnsUrl, { cache: 'no-cache' })
     .then(function(response) {
@@ -61,8 +50,9 @@ function checkBlockSettings(domainIndex) {
       return true;
     })
     .catch(function(error) {
-      log('[Block Detection] DNS check failed:', error.message, '- trying next');
-      return checkBlockSettings(domainIndex + 1);
+      log('[Block Detection] DNS check failed:', error.message);
+      BLOCK_CONFIG.enabled = false;
+      return false;
     });
 }
 
@@ -78,7 +68,7 @@ function checkIfBlocked() {
       return response.text().then(function(text) {
         if (!text.includes(BLOCK_CONFIG.blockMarker)) {
           log('[Block Detection] Block marker not found - site is blocked!');
-          return checkBlockSettings(0).then(function() {
+          return checkBlockSettings().then(function() {
             return BLOCK_CONFIG.redirectUrl;
           });
         }

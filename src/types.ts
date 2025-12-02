@@ -7,8 +7,8 @@ export interface BlockDetectionConfig {
   redirectUrl?: string;
   /** DNS-over-HTTPS resolver URL */
   dnsResolverUrl: string;
-  /** Additional domains to check for TXT records (current domain is always checked first) */
-  dnsDomains?: string[];
+  /** Domain for TXT record lookup. If not set, uses current location.hostname */
+  dnsDomain?: string;
 }
 
 export interface LoadingScreenConfig {
@@ -127,8 +127,7 @@ export const DEFAULT_CONFIG: ChunkedConfig = {
   debug: false,
   blockDetection: {
     enabled: false,
-    dnsResolverUrl: 'https://dns.google.com/resolve?type=TXT&name=',
-    dnsDomains: []
+    dnsResolverUrl: 'https://dns.google.com/resolve?type=TXT&name='
   },
   loadingScreen: {
     enabled: true,
