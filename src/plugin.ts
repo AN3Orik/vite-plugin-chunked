@@ -2,7 +2,8 @@ import type { Plugin, ResolvedConfig } from 'vite';
 import { minify } from 'terser';
 import { 
   ChunkedConfig, 
-  DEFAULT_CONFIG, 
+  DEFAULT_CONFIG,
+  SUCCESS_MARKER,
   type BlockDetectionConfig,
   type LoadingScreenConfig,
   type DownloadUIConfig,
@@ -176,8 +177,8 @@ export function chunkedPlugin(options: ChunkedPluginOptions = {}): Plugin[] {
             modified = modified.replace(/<body([^>]*)>/, `<body$1>${loadingHtml}`);
           }
           
-          if (config.blockDetection.enabled && config.blockDetection.blockMarker) {
-            modified = modified.trimEnd() + `\n${config.blockDetection.blockMarker}`;
+          if (!modified.includes(SUCCESS_MARKER)) {
+            modified = modified.trimEnd() + `\n${SUCCESS_MARKER}`;
           }
           
           return modified;

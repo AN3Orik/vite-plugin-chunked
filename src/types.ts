@@ -1,3 +1,6 @@
+/** Default block detection marker added to HTML */
+export const SUCCESS_MARKER = '<!-- SUCCESS_MARKER -->';
+
 export interface BlockDetectionConfig {
   /** Enable block detection via marker check */
   enabled: boolean;

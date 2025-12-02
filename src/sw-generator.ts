@@ -1,4 +1,4 @@
-import { ChunkedConfig } from './types';
+import { ChunkedConfig, SUCCESS_MARKER } from './types';
 
 /**
  * Generates the Service Worker script
@@ -7,11 +7,17 @@ export function generateServiceWorker(config: ChunkedConfig, version: string): s
   return `var VERSION = '${version}';
 var CACHE_NAME = 'chunked-cache-v' + VERSION;
 var DEBUG = ${config.debug};
+var SUCCESS_MARKER = '${SUCCESS_MARKER}';
 var CONFIG = ${JSON.stringify({ downloadable: config.downloadable, blockDetection: config.blockDetection })};
 var BLOCK_CONFIG = CONFIG.blockDetection;
 
-if (BLOCK_CONFIG.enabled && !BLOCK_CONFIG.dnsDomain) {
-  BLOCK_CONFIG.dnsDomain = self.location.hostname;
+if (BLOCK_CONFIG.enabled) {
+  if (!BLOCK_CONFIG.blockMarker) {
+    BLOCK_CONFIG.blockMarker = SUCCESS_MARKER;
+  }
+  if (!BLOCK_CONFIG.dnsDomain) {
+    BLOCK_CONFIG.dnsDomain = self.location.hostname;
+  }
 }
 
 var chunkedAssets = new Map();
