@@ -1,6 +1,6 @@
 {
   "name": "@anzohost/vite-plugin-chunked",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "description": "Vite plugin that splits assets into chunks and reassembles them via Service Worker to bypass ISP throttling",
   "type": "module",
   "main": "./dist/index.js",

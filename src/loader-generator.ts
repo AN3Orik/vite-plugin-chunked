@@ -228,6 +228,7 @@ export function generateLoader(
       .then(function() {
         updateProgress(20, 'Loading...');
         handleDownloadableNavigation();
+        setupDownloadLinkInterceptor();
         return loadApp();
       })
       .catch(function(error) {
@@ -362,7 +363,7 @@ function generateDownloadManagerCode(config: ChunkedConfig): string {
     });
   }
   
-  function fetchChunkedAsset(assetPath) {
+  function fetchChunkedAsset(assetPath, onProgress) {
     return fetch('/chunked-assets.json?v=' + VERSION)
       .then(function(r) { return r.json(); })
       .then(function(manifest) {
@@ -372,11 +373,11 @@ function generateDownloadManagerCode(config: ChunkedConfig): string {
         if (!asset) {
           return fetch(assetPath).then(function(r) { return r.blob(); });
         }
-        return fetchAndAssembleChunks(asset);
+        return fetchAndAssembleChunks(asset, onProgress);
       });
   }
   
-  function fetchAndAssembleChunks(asset) {
+  function fetchAndAssembleChunks(asset, onProgress) {
     var chunkedPath = asset.chunkedPath;
     return fetch('/' + chunkedPath + '/meta.json?v=' + VERSION)
       .then(function(r) { return r.json(); })
@@ -393,6 +394,10 @@ function generateDownloadManagerCode(config: ChunkedConfig): string {
                 .then(function(buf) {
                   chunks[idx] = buf;
                   loaded++;
+                  if (onProgress) {
+                    var percent = Math.round((loaded / meta.totalChunks) * 100);
+                    onProgress(percent, loaded, meta.totalChunks);
+                  }
                   return { loaded: loaded, total: meta.totalChunks };
                 })
             );
@@ -423,14 +428,8 @@ function generateDownloadManagerCode(config: ChunkedConfig): string {
     URL.revokeObjectURL(url);
   }
   
-  function handleDownloadableNavigation() {
-    var pathname = window.location.pathname;
-    if (!isDownloadableUrl(pathname)) return;
-    
-    var fileName = pathname.split('/').pop() || 'download';
-    log('Downloadable file detected:', fileName);
-    
-    history.replaceState(null, '', '/');
+  function startDownload(pathname, fileName) {
+    log('Starting download:', fileName);
     
     // Use custom handler if registered (e.g. DownloadManager with react-toastify)
     if (customDownloadHandler) {
@@ -440,17 +439,25 @@ function generateDownloadManagerCode(config: ChunkedConfig): string {
     
     var toastId = showToast({
       title: 'Downloading ' + fileName,
-      message: 'Starting...',
+      message: 'Connecting...',
       showProgress: true,
       closable: false
     });
     
-    fetchChunkedAsset(pathname)
+    function onProgress(percent, loaded, total) {
+      updateToast(toastId, {
+        message: percent + '%',
+        progress: percent
+      });
+    }
+    
+    fetchChunkedAsset(pathname, onProgress)
       .then(function(blob) {
         downloadFile(blob, fileName);
         updateToast(toastId, {
           title: fileName,
           message: 'Download complete!',
+          progress: 100,
           type: 'success',
           autoClose: 5000
         });
@@ -464,6 +471,56 @@ function generateDownloadManagerCode(config: ChunkedConfig): string {
           autoClose: 5000
         });
       });
+  }
+  
+  function handleDownloadableNavigation() {
+    // Handle if page was loaded with downloadable URL
+    var pathname = window.location.pathname;
+    if (!isDownloadableUrl(pathname)) return;
+    
+    var fileName = pathname.split('/').pop() || 'download';
+    log('Downloadable file detected on page load:', fileName);
+    
+    history.replaceState(null, '', '/');
+    startDownload(pathname, fileName);
+  }
+  
+  // Intercept clicks on downloadable links to prevent navigation
+  function setupDownloadLinkInterceptor() {
+    document.addEventListener('click', function(e) {
+      var target = e.target;
+      
+      // Find closest <a> tag
+      while (target && target.tagName !== 'A') {
+        target = target.parentElement;
+      }
+      
+      if (!target || !target.href) return;
+      
+      var url;
+      try {
+        url = new URL(target.href);
+      } catch (err) {
+        return;
+      }
+      
+      // Only handle same-origin links
+      if (url.origin !== window.location.origin) return;
+      
+      var pathname = url.pathname;
+      if (!isDownloadableUrl(pathname)) return;
+      
+      // Prevent navigation
+      e.preventDefault();
+      e.stopPropagation();
+      
+      var fileName = pathname.split('/').pop() || 'download';
+      log('Download link clicked:', fileName);
+      
+      startDownload(pathname, fileName);
+    }, true); // Use capture phase
+    
+    log('Download link interceptor installed');
   }
 `;
 }

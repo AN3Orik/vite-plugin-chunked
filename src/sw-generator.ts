@@ -220,9 +220,34 @@ self.addEventListener('fetch', function(event) {
   
   if (pathname.includes('/_chunks/') || pathname.endsWith('/meta.json')) return;
   
-  if (isDownloadable(pathname) && event.request.mode === 'navigate') {
-    log('Downloadable navigate request, serving index:', pathname);
-    event.respondWith(fetch('/index.html'));
+  // For downloadable files (exe, zip, etc), serve chunked version with download headers
+  if (isDownloadable(pathname)) {
+    log('Downloadable request:', pathname);
+    event.respondWith(
+      (manifestLoaded ? Promise.resolve() : loadManifest())
+        .then(function() {
+          var chunkedPath = getChunkedPath(pathname);
+          if (chunkedPath) {
+            log('Serving chunked downloadable:', pathname, '->', chunkedPath);
+            return assembleChunkedResponse(chunkedPath).then(function(response) {
+              // Add Content-Disposition header for download
+              var filename = pathname.split('/').pop();
+              var headers = new Headers(response.headers);
+              headers.set('Content-Disposition', 'attachment; filename="' + filename + '"');
+              return new Response(response.body, {
+                status: response.status,
+                headers: headers
+              });
+            });
+          }
+          log('Downloadable not in manifest, fetching directly:', pathname);
+          return fetch(event.request);
+        })
+        .catch(function(error) {
+          console.error('SW downloadable fetch error:', pathname, error);
+          return fetch(event.request);
+        })
+    );
     return;
   }
   
