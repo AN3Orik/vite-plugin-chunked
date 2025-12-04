@@ -379,32 +379,51 @@ function generateDownloadManagerCode(config: ChunkedConfig): string {
   
   function fetchAndAssembleChunks(asset, onProgress) {
     var chunkedPath = asset.chunkedPath;
+    var concurrency = CONFIG.concurrency || 6;
+    
     return fetch('/' + chunkedPath + '/meta.json?v=' + VERSION)
       .then(function(r) { return r.json(); })
       .then(function(meta) {
         var chunks = [];
         var loaded = 0;
-        var promises = [];
+        var queue = [];
         
+        // Create queue of chunk indices
         for (var i = 0; i < meta.totalChunks; i++) {
-          (function(idx) {
-            promises.push(
-              fetch('/' + chunkedPath + '/part_' + idx + '.zst?v=' + VERSION)
-                .then(function(r) { return r.arrayBuffer(); })
-                .then(function(buf) {
-                  chunks[idx] = buf;
-                  loaded++;
-                  if (onProgress) {
-                    var percent = Math.round((loaded / meta.totalChunks) * 100);
-                    onProgress(percent, loaded, meta.totalChunks);
-                  }
-                  return { loaded: loaded, total: meta.totalChunks };
-                })
-            );
-          })(i);
+          queue.push(i);
         }
         
-        return Promise.all(promises).then(function() {
+        function fetchChunk(idx) {
+          return fetch('/' + chunkedPath + '/part_' + idx + '.zst?v=' + VERSION)
+            .then(function(r) { 
+              if (!r.ok) throw new Error('Failed to fetch chunk ' + idx);
+              return r.arrayBuffer(); 
+            })
+            .then(function(buf) {
+              chunks[idx] = buf;
+              loaded++;
+              if (onProgress) {
+                var percent = Math.round((loaded / meta.totalChunks) * 100);
+                onProgress(percent, loaded, meta.totalChunks);
+              }
+            });
+        }
+        
+        function processQueue() {
+          if (queue.length === 0) {
+            return Promise.resolve();
+          }
+          var idx = queue.shift();
+          return fetchChunk(idx).then(processQueue);
+        }
+        
+        // Start concurrent workers
+        var workers = [];
+        for (var w = 0; w < Math.min(concurrency, meta.totalChunks); w++) {
+          workers.push(processQueue());
+        }
+        
+        return Promise.all(workers).then(function() {
           var totalSize = chunks.reduce(function(sum, c) { return sum + c.byteLength; }, 0);
           var combined = new Uint8Array(totalSize);
           var offset = 0;
